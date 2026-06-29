@@ -1,35 +1,54 @@
-from vector3 import Vector3
+from dataclasses import dataclass
 from rocket import Rocket
 
-GRAVITY = 9.81
+@dataclass
+class Physics:
+    gravity: float = -9.81
 
-def gravity_force(rocket: Rocket):
-
-    return Vector3(
-        0,
-        0,
-        -rocket.propellant_mass * GRAVITY
-    )
-
-def thrust_force(rocket: Rocket):
-
-    if not rocket.has_fuel:
-        return Vector3()
+    def compute_gravity_force(self, mass: float):
+        return mass * self.gravity
     
-    return Vector3(
-        0,
-        0,
-        rocket.thrust
-    )
+    def burn_fuel(self, rocket: Rocket, dt: float):
+         if not rocket.engine_on:
+            return
+         
+         rocket.fuel_mass -= rocket.fuel_burn_rate * dt
 
-def compute_forces(rocket: Rocket):
+         if rocket.fuel_mass <= 0:
+              rocket.fuel_mass = 0
+              rocket.engine_on = False
+              rocket.thrust = 0
+    
+    def net_force(self, rocket: Rocket, dt: float):
+            return self.compute_gravity_force(rocket.get_mass()) + rocket.thrust
+    
+    def step(self, rocket: Rocket, dt: float) -> None:
+        # 1. update fuel FIRST (state change)
+        self.burn_fuel(rocket, dt)
 
-    rocket.reset_forces()
+        # 2. compute mass ONCE
+        mass = rocket.get_mass()
 
-    rocket.add_force(
-        gravity_force(rocket)
-    )
+        # 3. forces
+        gravity_force = self.compute_gravity_force(mass)
+        thrust_force = rocket.thrust if rocket.engine_on else 0.0
+        net_force = gravity_force + thrust_force
 
-    rocket.add_force(
-        thrust_force(rocket)
-    )
+        # 4. physics
+        acceleration = net_force / mass
+
+        # 5. integration
+        rocket.velocity += acceleration * dt
+        if rocket.velocity <= 0 and rocket.position <= 0:
+             rocket.position = 0
+        else:
+             rocket.position += rocket.velocity * dt
+
+if __name__ == "__main__":
+    physics_test: Physics = Physics()
+    rocket_test: Rocket = Rocket()
+    print(physics_test.net_force(rocket=rocket_test, dt=0.1))
+    print(rocket_test.get_mass())
+    print(rocket_test.engine_on)
+    print(rocket_test.thrust)
+    print(physics_test.compute_gravity_force(rocket_test.get_mass()))
